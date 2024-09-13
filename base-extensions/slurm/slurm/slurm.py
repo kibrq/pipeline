@@ -30,6 +30,8 @@ class SlurmSBatchHeader:
 
     time: Optional[str] = None
 
+    job_name: Optional[str] = None
+
     #...
 
     def update(self, other, dtype=None):
@@ -160,6 +162,7 @@ class SlurmCommandConfigurator(ShellCommandConfigurator):
 
         header = header.update(self.slurm_header)
         header = header.update(SlurmSBatchHeader(array=f"1-{self._array_count}"))
+        header = header.update(SlurmSBatchHeader(job_name=self.name))
         
         if template_arguments is None:
             template_arguments = deepcopy(self.slurm_template_arguments)
