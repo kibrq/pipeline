@@ -1,40 +1,14 @@
-from typing import Optional, Union
+from typing import Optional, Union, Dict
 from pathlib import Path
 
 import pipeline
 
 ShellCommand = pipeline.get_class('shell_templates.Command')
-ShellCommandConfigurator = pipeline.get_class('shell_templates.CommandConfigurator')
+ShellCommandConfigurator = pipeline.get_class('shell_templates.Configurator')
 
 from dataclasses import dataclass, field, fields, asdict
-
-
-__SLURM_DEFAULT_TEMPLATE = """
-#! /bin/bash/
-
-${header}
-
-BUILD_PATH=${build_path}
-${before_command}
-
-# Take SLURM_ARRAY_TASK_ID line from .sh script
-command=$$($${BUILD_DIR}/$${SLURM_JOB_NAME}.sh | sed -n "$${SLURM_ARRAY_TASK_ID}p")
-
-echo "Executing $${command}"
-echo "Started at $$(date)"
-
-${exec} $${command}
-
-echo "Finished at $$(date)"
-
-${after_command}
-"""
-
-__SLURM_DEFAULT_TEMPLATE_ARGUMENTS = {
-    "before_command": "",
-    "exec": "eval",
-    "after_command": "",
-}
+from string import Template
+from copy import deepcopy
 
 
 @dataclass
@@ -52,36 +26,67 @@ class SlurmSBatchHeader:
 
     array: Optional[str] = None
 
+    reservation: Optional[str] = None
+
+    time: Optional[str] = None
+
     #...
 
-    def update(self: SlurmSBatchHeader, other: SlurmSBatchHeader, dtype=None):
+    def update(self, other, dtype=None):
         if dtype is None:
             dtype = type(self)
 
         arguments = dtype()
         
         for f in fields(type(other)) + fields(type(self)):
-            if hasattr(self, f.name) and getattr(self, f.name) != None:
+            if hasattr(self, f.name) and not getattr(self, f.name) is None:
                 setattr(arguments, f.name, getattr(self, f.name))
                 continue
-            if hasattr(other, f.name) and getattr(other, f.name) != None:
+            if hasattr(other, f.name) and not getattr(other, f.name) is None:
                 setattr(arguments, f.name, getattr(other, f.name))
 
         return arguments
 
     def to_sbatch_header_string(self):
-        return '\n'.join([f"#SBATCH --{key.replace('_', '-')}={value}" for key, value in asdict(self)])
+        return '\n'.join([
+            f"#SBATCH --{key.replace('_', '-')}={value}"
+            for key, value in asdict(self).items() if not value is None
+        ])
 
 
 @dataclass
 class SlurmCommandConfiguratorFactory:
+    template: Union[str, Path] = \
+"""
+#! /bin/bash/
+
+${header}
+
+BUILD_PATH=${build_path}
+${before_command}
+
+# Take SLURM_ARRAY_TASK_ID line from .sh script
+command=$$($${BUILD_PATH}/$${SLURM_JOB_NAME}.sh | sed -n "$${SLURM_ARRAY_TASK_ID}p")
+
+echo "Executing $${command}"
+echo "Started at $$(date)"
+
+${exec} $${command}
+
+echo "Finished at $$(date)"
+
+${after_command}
+"""
+
     prefix: str = 'slurm_'
     
-    header: SlurmSBatchArguments = field(default_factory=SlurmSBatchArguments)
+    header: SlurmSBatchHeader = field(default_factory=SlurmSBatchHeader)
 
-    template: Union[str, Path] = __SLURM_DEFAULT_TEMPLATE
-
-    template_arguments: Dict[str, str] = field(default_factory=lambda: copy(__SLURM_DEFAULT_TEMPLATE_ARGUMENTS))
+    template_arguments: Dict[str, str] = field(default_factory=lambda: {
+        "before_command": "",
+        "exec": "eval",
+        "after_command": "",
+    })
 
     def build(self, *args, **kwargs):
         return SlurmCommandConfigurator(
@@ -89,6 +94,7 @@ class SlurmCommandConfiguratorFactory:
             slurm_prefix = self.prefix,
             slurm_header = self.header,
             slurm_template = self.template,
+            slurm_template_arguments = self.template_arguments,
         )
 
 
@@ -97,9 +103,9 @@ SLURM_DEFAULT = SlurmCommandConfiguratorFactory()
 
 @dataclass
 class SlurmCommand(ShellCommand):
-    slurm: SlurmSBatchArguments = field(default_factory=lambda: SlurmSBatchArguments)
+    slurm: SlurmSBatchHeader = field(default_factory=SlurmSBatchHeader)
 
-    slurm_template: Union[str, Path] = __SLURM_DEFAULT_TEMPLATE
+    slurm_template: Union[str, Path] = None
 
     slurm_template_arguments: Dict[str, str] = field(default_factory=lambda: {})
 
@@ -112,9 +118,9 @@ class SlurmCommand(ShellCommand):
 class SlurmCommandConfigurator(ShellCommandConfigurator):
     slurm_prefix: str = 'slurm_'
 
-    slurm_header: SlurmSBatchArguments = field(default_factory=SlurmSBatchArguments)
+    slurm_header: SlurmSBatchHeader = field(default_factory=SlurmSBatchHeader)
 
-    slurm_template: Union[str, Path] = __SLURM_DEFAULT_TEMPLATE
+    slurm_template: Union[str, Path] = None
 
     slurm_template_arguments: Dict[str, str] = field(default_factory=lambda: {})
 
@@ -123,7 +129,7 @@ class SlurmCommandConfigurator(ShellCommandConfigurator):
     
     def append_command(self, *args, **kwargs):
         self._array_count += 1
-        super().append_command(*args, **kwargs)
+        getattr(super(), 'append_command')(*args, **kwargs)
 
     
     def slurm_finalize(
@@ -131,11 +137,11 @@ class SlurmCommandConfigurator(ShellCommandConfigurator):
         filename: Optional[str] = None,
         filepath: Optional[str] = None,
         template: Optional[Union[str, Path]] = None,
-        header: Optional[SlurmSBatchArguments] = None,
+        header: Optional[SlurmSBatchHeader] = None,
         template_arguments: Dict[str, str] = None,
     ):
 
-        filepath = self.__resolve_paths(filepath=filepath, filename=filename)
+        filepath = getattr(super(), 'resolve_paths')(filepath=filepath, filename=filename)
         
         if template is None:
             if hasattr(self.command, 'slurm_template') and not self.command.slurm_template is None:
@@ -144,22 +150,25 @@ class SlurmCommandConfigurator(ShellCommandConfigurator):
                 template = self.slurm_template
 
         if header is None:
-            header = SlurmSBatchArguments()
+            header = SlurmSBatchHeader()
 
         if hasattr(self.command, 'slurm'):
             header = header.update(self.command.slurm)
 
         header = header.update(self.slurm_header)
-        header = header.update(SlurmSBatchArguments(array=f"1-{self._array_count}"))
-
+        header = header.update(SlurmSBatchHeader(array=f"1-{self._array_count}"))
+        
         if template_arguments is None:
-            template_arguments = self.slurm_template_arguments
+            template_arguments = deepcopy(self.slurm_template_arguments)
 
         else:
             template_arguments.update(self.slurm_template_arguments)
 
         if not 'header' in template_arguments:
             template_arguments['header'] = header.to_sbatch_header_string()
+
+        if not 'build_path' in template_arguments:
+            template_arguments['build_path'] = self.args.build_path
 
         if isinstance(template, Path):
             template = template.read_text()
@@ -170,4 +179,4 @@ class SlurmCommandConfigurator(ShellCommandConfigurator):
     
     def __exit__(self, *args, **kwargs):
         self.slurm_finalize()
-        return super().__exit__(self, *args, **kwargs)
+        return super().__exit__(*args, **kwargs)

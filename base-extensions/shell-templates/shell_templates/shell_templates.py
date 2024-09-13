@@ -9,15 +9,15 @@ from pathlib import Path
 class ShellTemplatesCommand:
     parts: List[str] = field(default_factory=lambda: [])
 
-    __args: Optional[BaseArguments] = None
-
-    __name: Optional[str] = None
-
-    def build(self, __factory=ShellTemplatesCommandConfigurator, **kwargs):
-        if not 'args' in kwargs:
-            kwargs['args'] = self.__args
-        if not 'name' in kwargs:
-            kwargs['name'] = self.__name
+    def build(self, **kwargs):
+        if not 'args' in kwargs and hasattr(self, '__args'):
+            kwargs['args'] = getattr(self, '__args')
+        if not 'name' in kwargs and hasattr(self, '__name'):
+            kwargs['name'] = getattr(self, '__name')
+        if '__factory' in kwargs:
+            __factory = kwargs.pop('__factory')
+        else:
+            __factory = ShellTemplatesCommandConfigurator
 
         return __factory(**kwargs)
 
@@ -28,9 +28,9 @@ class ShellTemplatesArguments(BaseArguments):
         super().__post_init__()
 
         for f in fields(type(self)):
-            if isinstance(f.type, Type) and issubclass(f.type, ShellTemplatesCommand):
-                getattr(self, f.name).__args = self
-                getattr(self, f.name).__name = f.name
+            if isinstance(getattr(self, f.name), ShellTemplatesCommand):
+                setattr(getattr(self, f.name), '__args', self)
+                setattr(getattr(self, f.name), '__name', f.name)
 
 
 @dataclass
@@ -46,6 +46,8 @@ class ShellTemplatesCommandConfigurator:
     command: Optional[ShellTemplatesCommand] = None
 
     delimiter: str = ' '
+
+    overwrite_if_exists: bool = True
         
     def __enter__(self):
         return self
@@ -74,8 +76,12 @@ class ShellTemplatesCommandConfigurator:
 
             self.filepath = self.args.build_path / self.filename
 
+        if self.filepath and self.overwrite_if_exists:
+            with open(self.filepath, 'w') as file:
+                pass
 
-    def __resolve_paths(self, filename=None, filepath=None):
+
+    def resolve_paths(self, filename=None, filepath=None):
         if filepath is None:
             assert not self.filename is None or not filename is None
             if filename is None:
@@ -110,12 +116,7 @@ class ShellTemplatesCommandConfigurator:
         delimiter=None,
         add_newline: bool = True,
     ):
-        if filepath is None:
-            assert not self.filename is None or not filename is None
-            if filename is None:
-                filename = self.filename
-
-            filepath = self.args.build_path / filename
+        filepath = self.resolve_paths(filepath=filepath, filename=filename)
 
         if command_str is None:
             command_str = self.create_command(mapping=mapping, delimiter=delimiter, command=command)

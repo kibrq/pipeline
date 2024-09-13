@@ -41,6 +41,7 @@ class BaseArguments:
         # Ensure base_path is a Path object, in case a string is provided
         if not isinstance(self.base_path, Path):
             self.base_path = Path(self.base_path)
+        self.base_path = self.base_path.resolve()
         
         if not self.base_path.exists():
             if not self.create_if_not_exist:
@@ -52,9 +53,7 @@ class BaseArguments:
         # Generate a build directory name based on the current date and time if not provided
         if not self.build_dir:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            self.build_dir = self.base_path / f'build_{timestamp}'
-        else:
-            self.build_dir = self.base_path / self.build_dir
+            self.build_dir = f'build_{timestamp}'
 
         if not self.build_path.exists():
             if not self.create_if_not_exist:

@@ -1,0 +1,12 @@
+base_path: /home/kibrq/Workspace/pipeline/example/builds
+create_if_not_exist: True
+
+generate_file:
+    parts:
+        - 'touch'
+        - '${build_path}/file.txt'
+
+fill_file:
+    parts:
+        - 'echo "${parameter}"'
+        - '> ${build_path}/file.txt'
