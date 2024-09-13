@@ -67,7 +67,7 @@ BUILD_PATH=${build_path}
 ${before_command}
 
 # Take SLURM_ARRAY_TASK_ID line from .sh script
-command=$$($${BUILD_PATH}/$${SLURM_JOB_NAME}.sh | sed -n "$${SLURM_ARRAY_TASK_ID}p")
+command=$$(cat $${BUILD_PATH}/$${SLURM_JOB_NAME}.sh | sed -n "$${SLURM_ARRAY_TASK_ID}p")
 
 echo "Executing $${command}"
 echo "Started at $$(date)"
