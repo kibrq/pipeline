@@ -99,13 +99,7 @@ ${after_command}
             kwargs['slurm_template'] = self.template
             
         
-        return SlurmCommandConfigurator(
-            *args, **kwargs,
-            slurm_prefix = self.prefix,
-            slurm_header = self.header,
-            slurm_template = self.template,
-            slurm_template_arguments = self.template_arguments,
-        )
+        return SlurmCommandConfigurator(*args, **kwargs)
 
 
 SLURM_DEFAULT = SlurmCommandConfiguratorFactory()
