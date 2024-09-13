@@ -6,10 +6,12 @@ setup(
     packages=find_packages(),
     entry_points={
         'pipeline.plugins': [
-            'MyPlugin = shell_templates.shell_templates:ShellTemplatesArguments'
+            'shell_templates.Command = shell_templates.shell_templates:ShellTemplatesCommand',
+            'shell_templates.Arguments = shell_templates.shell_templates:ShellTemplatesArguments',
+            'shell_templates.Configurator = shell_templates.shell_templates:ShellTemplatesCommandConfigurator'
         ]
     },
     install_requires=[
-        'pipeline @ git+https://github.com/kibrq/pipeline.git'
+        'pipeline @ git+ssh://git@github.com/kibrq/pipeline.git'
     ],
 )

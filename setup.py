@@ -14,7 +14,7 @@ setup(
     description='A description of pipeline',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    url='https://github.com/kibrq/pipelein',  # Replace with your GitHub URL
+    url='https://github.com/kibrq/pipeline',  # Replace with your GitHub URL
     author='Kirill Brilliantov',
     author_email='ki.br178@gmail.com',
 )

@@ -1,34 +1,14 @@
-from typing import Optional, List
+from typing import Optional, List, Dict
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from yaml import safe_dump
-
-
-class BaseCommandConfigurator:
-    def __init__(self):
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        return False
-
-
-@dataclass
-class BaseCommand:
-    # The name of the command
-    name: str
-
+from datetime import datetime
 
 @dataclass
 class BaseArguments:
 
     # The base directory path where build directories or configuration files will be stored.
     base_path: Path
-
-    # Dictionary of commands to execute in the pipeline
-    commands: Dict[str, BaseCommand]
 
     # Optional directory name inside base_path. If not provided, a unique directory name
     # will be generated based on the current date and time.
@@ -48,7 +28,7 @@ class BaseArguments:
 
     @property
     def build_path(self):
-        return self.base_path / build_dir
+        return self.base_path / self.build_dir
 
     @property
     def config_path(self):
@@ -62,7 +42,7 @@ class BaseArguments:
         if not isinstance(self.base_path, Path):
             self.base_path = Path(self.base_path)
         
-         if not self.base_path.exists():
+        if not self.base_path.exists():
             if not self.create_if_not_exist:
                 raise FileNotFoundError(f"Base path '{self.base_path}' does not exist and 'create_if_not_exist' is set to False.")
             else:
