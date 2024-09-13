@@ -89,6 +89,16 @@ ${after_command}
     })
 
     def build(self, *args, **kwargs):
+        if not 'slurm_template_arguments' in kwargs:
+            kwargs['slurm_template_arguments'] = self.template_arguments
+        if not 'slurm_header' in kwargs:
+            kwargs['slurm_header'] = self.header
+        if not 'slurm_prefix' in kwargs:
+            kwargs['slurm_prefix'] = self.prefix
+        if not 'slurm_template' in kwargs:
+            kwargs['slurm_template'] = self.template
+            
+        
         return SlurmCommandConfigurator(
             *args, **kwargs,
             slurm_prefix = self.prefix,
