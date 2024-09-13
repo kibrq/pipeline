@@ -13,13 +13,13 @@ class ShellTemplatesCommand:
 
     __name: Optional[str] = None
 
-    def build(self, **kwargs, __factory=ShellTemplatesCommandConfigurator):
+    def build(self, **kwargs, factory__=ShellTemplatesCommandConfigurator):
         if not 'args' in kwargs:
             kwargs['args'] = self.__args
         if not 'name' in kwargs:
             kwargs['name'] = self.__name
 
-        return __factory(**kwargs)
+        return factory__(**kwargs)
 
 @dataclass
 class ShellTemplatesArguments(BaseArguments):

@@ -6,9 +6,11 @@ setup(
     packages=find_packages(),
     entry_points={
         'pipeline.plugins': [
-            'slurm.Command = slurm.slurm:Command',
-            'slurm.Arguments = slurm.slurm:Arguments',
-            'slurm.Configurator = slurm.slurm:CommandConfigurator'
+            'slurm.Command = slurm.slurm:SlurmCommand',
+            'slurm.Configurator = slurm.slurm:SlurmCommandConfigurator',
+            'slurm.SBatchHeader = slurm.slurm:SlurmSBatchHeader',
+            'slurm.CommandConfiguratorFactory = slurm.slurm.SlurmCommandConfiguratorFactory',
+            
         ]
     },
     install_requires=[
