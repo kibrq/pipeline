@@ -57,8 +57,7 @@ class SlurmSBatchHeader:
 @dataclass
 class SlurmCommandConfiguratorFactory:
     template: Union[str, Path] = \
-"""
-#!/bin/bash
+"""#!/bin/bash
 
 ${header}
 
