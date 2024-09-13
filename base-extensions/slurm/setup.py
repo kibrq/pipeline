@@ -12,7 +12,7 @@ setup(
         ]
     },
     install_requires=[
-        'shell-templates @ git+ssh://git@github.com/kibrq/pipeline.git#egg=shell-templates&subdirectory=base-extensions/shell-templates',
+        'pipeline-shell-templates-plugin @ git+ssh://git@github.com/kibrq/pipeline.git#egg=pipeline-shell-templates-plugin&subdirectory=base-extensions/shell-templates',
         'pipeline @ git+ssh://git@github.com/kibrq/pipeline.git'
     ],
 )

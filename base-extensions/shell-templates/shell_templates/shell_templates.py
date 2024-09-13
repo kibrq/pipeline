@@ -9,17 +9,17 @@ from pathlib import Path
 class ShellTemplatesCommand:
     parts: List[str] = field(default_factory=lambda: [])
 
-    args: Optional[BaseArguments] = None
+    __args: Optional[BaseArguments] = None
 
-    name: Optional[str] = None
+    __name: Optional[str] = None
 
-    def build(self, **kwargs):
+    def build(self, **kwargs, __factory=ShellTemplatesCommandConfigurator):
         if not 'args' in kwargs:
-            kwargs['args'] = self.args
+            kwargs['args'] = self.__args
         if not 'name' in kwargs:
-            kwargs['name'] = self.name
+            kwargs['name'] = self.__name
 
-        return ShellTemplatesCommandConfigurator(**kwargs)
+        return __factory(**kwargs)
 
 @dataclass
 class ShellTemplatesArguments(BaseArguments):
@@ -29,8 +29,8 @@ class ShellTemplatesArguments(BaseArguments):
 
         for f in fields(type(self)):
             if isinstance(f.type, Type) and issubclass(f.type, ShellTemplatesCommand):
-                getattr(self, f.name).args = self
-                getattr(self, f.name).name = f.name
+                getattr(self, f.name).__args = self
+                getattr(self, f.name).__name = f.name
 
 
 @dataclass
@@ -73,6 +73,17 @@ class ShellTemplatesCommandConfigurator:
                 self.filename = f'{self.name}.sh'
 
             self.filepath = self.args.build_path / self.filename
+
+
+    def __resolve_paths(self, filename=None, filepath=None):
+        if filepath is None:
+            assert not self.filename is None or not filename is None
+            if filename is None:
+                filename = self.filename
+
+            filepath = self.args.build_path / filename
+        return filepath
+
 
 
     def create_command(self, command=None, mapping=None, delimiter=None):
