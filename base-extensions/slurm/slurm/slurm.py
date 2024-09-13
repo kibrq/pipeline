@@ -103,7 +103,7 @@ class SlurmCommand(ShellCommand):
 
     slurm_template_arguments: Dict[str, str] = field(default_factory=lambda: {})
 
-    def build(self, **kwargs, factory__=SLURM_DEFAULT.build):
+    def build(self, __factory=SLURM_DEFAULT.build, **kwargs):
         return super().build(**kwargs, __factory=__factory)
 
 
