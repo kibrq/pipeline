@@ -125,6 +125,8 @@ class SlurmCommand(ShellCommand):
 class SlurmCommandConfigurator(ShellCommandConfigurator):
     slurm_prefix: str = 'slurm_'
 
+    logs_dir: str = 'logs'
+
     slurm_header: SlurmSBatchHeader = field(default_factory=SlurmSBatchHeader)
 
     slurm_template: Union[str, Path] = None
@@ -163,12 +165,15 @@ class SlurmCommandConfigurator(ShellCommandConfigurator):
             header = header.update(self.command.slurm)
 
         header = header.update(self.slurm_header)
-        header = header.update(SlurmSBatchHeader(array=f"1-{self._array_count}"))
-        header = header.update(SlurmSBatchHeader(job_name=self.name))
+        header = header.update(SlurmSBatchHeader(
+            array=f"1-{self._array_count}",
+            job_name=self.name,
+            output=self.args.build_path / self.logs_dir / f'stdout_{self.name}_%a.log',
+            error=self.args.build_path / self.logs_dir / f'stderr_{self.name}_%a.log',
+        ))
         
         if template_arguments is None:
             template_arguments = deepcopy(self.slurm_template_arguments)
-
         else:
             template_arguments.update(self.slurm_template_arguments)
 
