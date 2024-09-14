@@ -32,6 +32,8 @@ class SlurmSBatchHeader:
 
     job_name: Optional[str] = None
 
+    cpus_per_task: Optional[int] = None
+
     #...
 
     def update(self, other, dtype=None):
