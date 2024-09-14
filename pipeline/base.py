@@ -1,8 +1,9 @@
 from typing import Optional, List, Dict
 from dataclasses import dataclass, field, asdict
-from pathlib import Path
-from yaml import safe_dump
+from pathlib import Path, PosixPath
+import yaml
 from datetime import datetime
+
 
 @dataclass
 class BaseArguments:
@@ -17,6 +18,10 @@ class BaseArguments:
     # Optional configuration file name that can be saved within the build_dir. If provided,
     # the full path to this config file will be created or checked.
     save_config_name: Optional[str] = None
+
+    # Optional main script file name that can be saved within the build_dir. If provided,
+    # the full path to this main script file will be created or checked.
+    save_main_script_name: Optional[str] = None
 
     # If True, an existing config file will be overwritten. If False, an error will be raised
     # if the file already exists to prevent accidental overwrites.
@@ -35,6 +40,12 @@ class BaseArguments:
         if self.save_config_name is None:
             return None
         return self.build_path / self.save_config_name
+
+    @property
+    def main_script_path(self):
+        if self.save_main_script_name is None:
+            return None
+        return self.build_path / self.save_main_script_name
 
     
     def __post_init__(self):
@@ -62,16 +73,21 @@ class BaseArguments:
                 # Create build_dir if create_if_not_exist is True
                 self.build_path.mkdir(parents=True, exist_ok=True)
 
-        # If save_config_name is provided, append it to build_dir
-        if self.save_config_name:
-            self.save_config_name = self.build_path / self.save_config_name
-
         # Handle the overwrite logic
-        if self.save_config_name and self.save_config_name.exists() and not self.do_overwrite:
-            raise FileExistsError(f"{self.save_config_name} already exists. Set `do_overwrite=True` to overwrite it.")
+        if self.config_path and self.config_path.exists() and not self.do_overwrite:
+            raise FileExistsError(f"{self.config_path} already exists. Set `do_overwrite=True` to overwrite it.")
 
-        if not self.config_path is None:
+        if self.config_path:
             with open(self.config_path, 'w') as file:
-                safe_dump(asdict(self), file)
+                yaml.dump(asdict(self), file)
+
+        if self.main_script_path and self.main_script_path.exists() and not self.do_overwrite:
+            raise FileExistsError(f"{self.main_script_path} already exists. Set `do_overwrite=True` to overwrite it.")
+
+        if self.main_script_path:
+            from shutil import copyfile
+            from sys import argv
+            
+            copyfile(Path(argv[0]).resolve(), self.main_script_path)
         
     
