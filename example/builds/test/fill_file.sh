@@ -1,0 +1,1 @@
+echo "20" > /home/kibrq/Workspace/pipeline/example/builds/test/file.txt
