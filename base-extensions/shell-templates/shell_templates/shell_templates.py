@@ -5,9 +5,26 @@ from string import Template
 from pathlib import Path
 
 
+def deep_set_default(d: dict, default_values: dict):
+    """
+    Recursively sets default values for missing or None keys in a nested dictionary.
+    
+    :param d: The target dictionary to update.
+    :param default_values: The default values dictionary to use.
+    """
+    for key, default in default_values.items():
+        # If key is missing or is None, set it to the default value
+        if key not in d or d[key] is None:
+            d[key] = default
+        # If both are dictionaries, recurse into the nested dictionary
+        elif isinstance(d[key], dict) and isinstance(default, dict):
+            deep_set_default(d[key], default)
+
+
+
 @dataclass
 class ShellTemplatesCommand:
-    parts: List[str] = field(default_factory=lambda: [])
+    recipe: List[str] = field(default_factory=lambda: [])
 
     def build(self, **kwargs):
         if not 'args' in kwargs and hasattr(self, '__args'):
@@ -20,6 +37,7 @@ class ShellTemplatesCommand:
             __factory = ShellTemplatesCommandConfigurator
 
         return __factory(**kwargs)
+
 
 @dataclass
 class ShellTemplatesArguments(BaseArguments):
@@ -39,20 +57,21 @@ class ShellTemplatesCommandConfigurator:
 
     args: Optional[BaseArguments] = None
 
-    filename: Optional[str] = None
-
-    filepath: Optional[Path] = None
+    filename_template: str = "{build_path}/{name}.sh"
 
     command: Optional[ShellTemplatesCommand] = None
 
     delimiter: str = ' '
 
-    overwrite_if_exists: bool = True
+    open_mode: str = 'w'
+
+    recipe: List[str] = field(default_factory=lambda: [])
         
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        self.finalize()
         return False
 
     def __post_init__(self):
@@ -66,35 +85,21 @@ class ShellTemplatesCommandConfigurator:
             self.command = getattr(self.args, self.name)
 
         assert isinstance(self.command, ShellTemplatesCommand)
-        
-        if self.filepath is None:
-
-            assert not self.filename is None or not self.name is None
-
-            if self.filename is None:
-                self.filename = f'{self.name}.sh'
-
-            self.filepath = self.args.build_path / self.filename
-
-        if self.filepath and self.overwrite_if_exists:
-            with open(self.filepath, 'w') as file:
-                pass
 
 
-    def resolve_paths(self, filename=None, filepath=None):
-        if filepath is None:
-            assert not self.filename is None or not filename is None
-            if filename is None:
-                filename = self.filename
-
-            filepath = self.args.build_path / filename
-        return filepath
-
-
+    @property
+    def metadata(self):
+        return dict(
+            name = self.name,
+            build_path = None if self.args is None else str(self.args.build_path),
+            # ...
+        )
 
     def create_command(self, command=None, mapping=None, delimiter=None):
         if mapping is None:
             mapping = {}
+
+        deep_set_default(mapping, self.metadata)
 
         if command is None:
             command = self.command
@@ -102,29 +107,24 @@ class ShellTemplatesCommandConfigurator:
         if delimiter is None:
             delimiter = self.delimiter
         
-        return delimiter.join([Template(part).substitute(mapping) for part in self.command.parts])
-
+        return delimiter.join([Template(part).substitute(mapping) for part in self.command.recipe])
+        
     
     def append_command(
         self,
-        open_mode='a',
-        filename=None,
-        filepath=None,
         command=None,
         command_str=None,
         mapping=None,
         delimiter=None,
-        add_newline: bool = True,
     ):
-        filepath = self.resolve_paths(filepath=filepath, filename=filename)
-
         if command_str is None:
             command_str = self.create_command(mapping=mapping, delimiter=delimiter, command=command)
 
-        with open(filepath, open_mode) as file:
-            file.write(command_str)
-            if add_newline:
-                file.write('\n')
-                
+        self.recipe.append(command_str)
 
     
+    def finalize(self):
+        filename = self.filename_template.format(**self.metadata)
+
+        with open(filename, self.open_mode) as file:
+            file.write('\n'.join(self.recipe))

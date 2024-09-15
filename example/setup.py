@@ -1,15 +1,17 @@
 import pyrallis
 import pipeline
 
-BaseArguments = pipeline.get_class('shell_templates.Arguments')
+BaseArguments = pipeline.get_class('slurm.Arguments')
 Command = pipeline.get_class('slurm.Command')
-SLURM_DEFAULT = pipeline.get_class('slurm.Default')
+DefaultBody = pipeline.get_class('slurm.DefaultTemplateBody')
 
 from dataclasses import dataclass, field
+from pathlib import Path
+
 
 @dataclass
 class ParametrizedCommand(Command):
-    some_parameter: int = 20
+    some_parameter: int = 20 
 
 @dataclass
 class Arguments(BaseArguments):
@@ -21,22 +23,11 @@ class Arguments(BaseArguments):
 @pyrallis.wrap()
 def main(args: Arguments):
 
-    SLURM_DEFAULT.header.mem = "1gb"
-    SLURM_DEFAULT.header.output = "stdout_%A_%a.log"
-    SLURM_DEFAULT.header.error = "stderr_%A_%a.log"
-
-    DEFAULT_VARIABLES = {
-        'build_path': args.build_path,
-    }
-    
     with args.generate_file.build() as script:
-        script.append_command(mapping={
-            **DEFAULT_VARIABLES,
-        })
+        script.append_command()
 
     with args.fill_file.build() as script:
         script.append_command(mapping={
-            **DEFAULT_VARIABLES,
             'parameter': args.fill_file.some_parameter
         })
 

@@ -1,12 +1,23 @@
 base_path: /home/kibrq/Workspace/pipeline/example/builds
 create_if_not_exist: True
 
+default_slurm:
+    header:
+        mem: 1gb
+        reservation: 'reservation'
+        time: '0-01:00:00'
+    body:
+        before_command: "ml R"
+
 generate_file:
-    parts:
+    recipe:
         - 'touch'
         - '${build_path}/file.txt'
+    slurm:
+        header:
+            job_name_template: "super_{name}"
 
 fill_file:
-    parts:
+    recipe:
         - 'echo "${parameter}"'
         - '> ${build_path}/file.txt'

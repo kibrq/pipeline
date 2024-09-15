@@ -9,8 +9,9 @@ setup(
             'slurm.Command = slurm.slurm:SlurmCommand',
             'slurm.Configurator = slurm.slurm:SlurmCommandConfigurator',
             'slurm.SBatchHeader = slurm.slurm:SlurmSBatchHeader',
-            'slurm.CommandConfiguratorFactory = slurm.slurm:SlurmCommandConfiguratorFactory',
-            'slurm.Default = slurm.slurm:SLURM_DEFAULT',
+            'slurm.Slurm = slurm.slurm:Slurm',
+            'slurm.DefaultTemplateBody = slurm.slurm:SlurmDefaultTemplateBody',
+            'slurm.Arguments = slurm.slurm:SlurmArguments',
             
         ]
     },

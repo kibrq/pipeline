@@ -1,14 +1,45 @@
-from typing import Optional, Union, Dict
+from typing import Optional, Union, Dict, List
 from pathlib import Path
 
 import pipeline
 
+ShellArguments = pipeline.get_class('shell_templates.Arguments')
 ShellCommand = pipeline.get_class('shell_templates.Command')
 ShellCommandConfigurator = pipeline.get_class('shell_templates.Configurator')
 
 from dataclasses import dataclass, field, fields, asdict
 from string import Template
 from copy import deepcopy
+
+
+def deep_set_default(d: dict, default_values: dict):
+    """
+    Recursively sets default values for missing or None keys in a nested dictionary.
+    
+    :param d: The target dictionary to update.
+    :param default_values: The default values dictionary to use.
+    """
+    for key, default in default_values.items():
+        # If key is missing or is None, set it to the default value
+        if key not in d or d[key] is None:
+            d[key] = default
+        # If both are dictionaries, recurse into the nested dictionary
+        elif isinstance(d[key], dict) and isinstance(default, dict):
+            deep_set_default(d[key], default)
+
+
+def update_dataclass(one, another, dtype=None):
+    data = asdict(one)
+    deep_set_default(data, asdict(another))
+    
+    if dtype is None: dtype = type(one)
+    def dataclass_from_dict(dtype, data):
+        try:
+            fieldtypes = { f.name: f.type for f in fields(dtype)}
+            return dtype(**{f: dataclass_from_dict(fieldtypes[f], data[f]) for f in data})
+        except BaseException as ex:
+            return data # Not a dataclass field
+    return dataclass_from_dict(dtype, data)
 
 
 @dataclass
@@ -22,9 +53,15 @@ class SlurmSBatchHeader:
 
     output: Optional[str] = None
 
+    output_template: Optional[str] = None
+
     error: Optional[str] = None
 
+    error_template: Optional[str] = None
+
     array: Optional[str] = None
+
+    array_template: Optional[str] = None
 
     reservation: Optional[str] = None
 
@@ -32,44 +69,85 @@ class SlurmSBatchHeader:
 
     job_name: Optional[str] = None
 
+    job_name_template: Optional[str] = None
+
     cpus_per_task: Optional[int] = None
 
     #...
+    
+    def to_sbatch_header_string(self, metadata={}):
+        data = asdict(self)
 
-    def update(self, other, dtype=None):
-        if dtype is None:
-            dtype = type(self)
-
-        arguments = dtype()
-        
-        for f in fields(type(other)) + fields(type(self)):
-            if hasattr(self, f.name) and not getattr(self, f.name) is None:
-                setattr(arguments, f.name, getattr(self, f.name))
+        for k, v in data.items():
+            if k.endswith('template'):
                 continue
-            if hasattr(other, f.name) and not getattr(other, f.name) is None:
-                setattr(arguments, f.name, getattr(other, f.name))
-
-        return arguments
-
-    def to_sbatch_header_string(self):
+            if not f'{k}_template' in data:
+                continue
+            if data[f'{k}_template'] is None:
+                continue
+            if v:
+                continue
+            data[k] = data[f'{k}_template'].format(**metadata)
+        
         return '\n'.join([
             f"#SBATCH --{key.replace('_', '-')}={value}"
-            for key, value in asdict(self).items() if not value is None
+            for key, value in data.items() if not value is None and not key.endswith('template')
         ])
 
 
 @dataclass
-class SlurmCommandConfiguratorFactory:
-    template: Union[str, Path] = \
+class SlurmDefaultTemplateBody:
+    before_command: Optional[str] = None
+
+    exec: Optional[str] = None
+
+    after_command: Optional[str] = None
+
+
+@dataclass
+class Slurm:
+    template: Optional[str] = None
+
+    header: SlurmSBatchHeader = field(default_factory=SlurmSBatchHeader)
+
+    body: SlurmDefaultTemplateBody = field(default_factory=SlurmDefaultTemplateBody)
+
+    filename_template: Optional[str] = None
+
+
+@dataclass
+class SlurmCommand(ShellCommand):
+    slurm: Slurm = field(default_factory=Slurm)
+
+    def build(self, *args, __factory=None, **kwargs):
+        if __factory is None:
+            __factory = SlurmCommandConfigurator
+        
+        return super().build(*args, __factory=__factory, **kwargs)
+
+
+@dataclass
+class SlurmArguments(ShellArguments):
+    default_slurm: Slurm = field(default_factory=lambda: Slurm())
+
+    folders_to_create: List[str] = field(default_factory=lambda: ['logs'])
+
+    def __post_init__(self):
+        getattr(super(), '__post_init__')()
+
+        for folder in self.folders_to_create:
+            (self.build_path / folder).mkdir(parents=True, exist_ok=True)
+
+        self.default_slurm = update_dataclass(self.default_slurm, Slurm(
+        template =\
 """#!/bin/bash
 
 ${header}
 
-BUILD_PATH=${build_path}
 ${before_command}
 
 # Take SLURM_ARRAY_TASK_ID line from .sh script
-command=$$(cat $${BUILD_PATH}/$${SLURM_JOB_NAME}.sh | sed -n "$${SLURM_ARRAY_TASK_ID}p")
+command=$$(cat ${build_path}/$${SLURM_JOB_NAME}.sh | sed -n "$${SLURM_ARRAY_TASK_ID}p")
 
 echo "Executing $${command}"
 echo "Started at $$(date)"
@@ -79,116 +157,86 @@ ${exec} $${command}
 echo "Finished at $$(date)"
 
 ${after_command}
-"""
-
-    prefix: str = 'slurm_'
-    
-    header: SlurmSBatchHeader = field(default_factory=SlurmSBatchHeader)
-
-    template_arguments: Dict[str, str] = field(default_factory=lambda: {
-        "before_command": "",
-        "exec": "eval",
-        "after_command": "",
-    })
-
-    def build(self, *args, **kwargs):
-        if not 'slurm_template_arguments' in kwargs:
-            kwargs['slurm_template_arguments'] = self.template_arguments
-        if not 'slurm_header' in kwargs:
-            kwargs['slurm_header'] = self.header
-        if not 'slurm_prefix' in kwargs:
-            kwargs['slurm_prefix'] = self.prefix
-        if not 'slurm_template' in kwargs:
-            kwargs['slurm_template'] = self.template
-            
+""",
+        header = SlurmSBatchHeader(
+            job_name_template = '{name}',
+            output_template = '{build_path}/logs/stdout_{name}_%a.log',
+            error_template = '{build_path}/logs/stderr_{name}_%a.log',
+            array_template = '1-{array_size}'
+        ),
         
-        return SlurmCommandConfigurator(*args, **kwargs)
+        body = SlurmDefaultTemplateBody(
+            before_command = '',
+            after_command = '',
+            exec = 'eval',    
+        ),
+        
+        filename_template = '{build_path}/slurm_{name}.sh',  
+        ))
+        
 
-
-SLURM_DEFAULT = SlurmCommandConfiguratorFactory()
-
-
-@dataclass
-class SlurmCommand(ShellCommand):
-    slurm: SlurmSBatchHeader = field(default_factory=SlurmSBatchHeader)
-
-    slurm_template: Union[str, Path] = None
-
-    slurm_template_arguments: Dict[str, str] = field(default_factory=lambda: {})
-
-    def build(self, __factory=SLURM_DEFAULT.build, **kwargs):
-        return super().build(**kwargs, __factory=__factory)
-
+        for f in fields(self):
+            if (command := getattr(self, f.name)) and isinstance(command, SlurmCommand):
+                setattr(command, 'slurm', update_dataclass(getattr(command, 'slurm'), self.default_slurm))
 
 
 @dataclass
 class SlurmCommandConfigurator(ShellCommandConfigurator):
-    slurm_prefix: str = 'slurm_'
+    __slurm_array_size: int = 0
 
-    logs_dir: str = 'logs'
+    slurm_template: Optional[str] = None
 
     slurm_header: SlurmSBatchHeader = field(default_factory=SlurmSBatchHeader)
 
-    slurm_template: Union[str, Path] = None
+    slurm_body: Dict[str, str] = field(default_factory=lambda: {})
+    
+    slurm_filename_template: Optional[str] = None 
 
-    slurm_template_arguments: Dict[str, str] = field(default_factory=lambda: {})
-
-    _array_count: int = 0
+    def __post_init__(self):
+        getattr(super(), '__post_init__')()
+        
+        assert self.args
+        assert self.name    
 
     
     def append_command(self, *args, **kwargs):
-        self._array_count += 1
+        self.__slurm_array_size += 1
         getattr(super(), 'append_command')(*args, **kwargs)
 
     
+    @property
+    def metadata(self):
+        data = getattr(super(), 'metadata')
+        return {
+            **data,
+            'array_size': self.__slurm_array_size,
+        }
+
+
     def slurm_finalize(
         self,
-        filename: Optional[str] = None,
-        filepath: Optional[str] = None,
-        template: Optional[Union[str, Path]] = None,
-        header: Optional[SlurmSBatchHeader] = None,
-        template_arguments: Dict[str, str] = None,
     ):
-
-        filepath = getattr(super(), 'resolve_paths')(filepath=filepath, filename=filename)
-        
-        if template is None:
-            if hasattr(self.command, 'slurm_template') and not self.command.slurm_template is None:
-                template = self.command.slurm_template
-            else:
-                template = self.slurm_template
-
-        if header is None:
-            header = SlurmSBatchHeader()
+        template = self.slurm_template
+        filename_template = self.slurm_filename_template
+        header = self.slurm_header
+        mapping = self.slurm_body
 
         if hasattr(self.command, 'slurm'):
-            header = header.update(self.command.slurm)
+            if template is None:
+                template = self.command.slurm.template
+            if filename_template is None:
+                filename_template = self.command.slurm.filename_template
+            for k, v in asdict(self.command.slurm.body).items():
+                mapping.setdefault(k, v)
+            header = update_dataclass(header, self.command.slurm.header)
 
-        header = header.update(self.slurm_header)
-        header = header.update(SlurmSBatchHeader(
-            array=f"1-{self._array_count}",
-            job_name=self.name,
-            output=self.args.build_path / self.logs_dir / f'stdout_{self.name}_%a.log',
-            error=self.args.build_path / self.logs_dir / f'stderr_{self.name}_%a.log',
-        ))
-        
-        if template_arguments is None:
-            template_arguments = deepcopy(self.slurm_template_arguments)
-        else:
-            template_arguments.update(self.slurm_template_arguments)
+        mapping.setdefault('header', header.to_sbatch_header_string(self.metadata))
+        for k, v in self.metadata.items():
+            mapping.setdefault(k, v)
 
-        if not 'header' in template_arguments:
-            template_arguments['header'] = header.to_sbatch_header_string()
-
-        if not 'build_path' in template_arguments:
-            template_arguments['build_path'] = self.args.build_path
-
-        if isinstance(template, Path):
-            template = template.read_text()
-
-        with open(filepath.parents[0] / f'{self.slurm_prefix}{filepath.name}', 'w') as file:
-            file.write(Template(template).substitute(template_arguments))
-
+        with open(filename_template.format(**self.metadata), 'w') as file:
+            file.write(Template(template).substitute(mapping))
+            
     
     def __exit__(self, *args, **kwargs):
         self.slurm_finalize()
