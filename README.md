@@ -16,4 +16,4 @@ To load an existing plugin you just need to `pip install` it from `GitHub` or `p
 For example usage of `slurm` plugin please take a look into the `example`.
 
 ## Pyrallis
-With (`pyrallis`)[https://github.com/eladrich/pyrallis] you can add `YAML` configuration to your workflow. In the `example` folder you can see the how these two libraries can be combined.
+With [`pyrallis`](https://github.com/eladrich/pyrallis) you can add `YAML` configuration to your workflow. In the `example` folder you can see the how these two libraries can be combined.
